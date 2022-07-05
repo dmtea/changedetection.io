@@ -58,6 +58,10 @@ EXPOSE 5000
 
 # The actual flask app
 COPY changedetectionio /app/changedetectionio
+
+# The test dir
+COPY tmp /app/tmp
+
 # The eventlet server wrapper
 COPY changedetection.py /app/changedetection.py
 

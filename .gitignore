@@ -11,3 +11,7 @@ venv
 test-datastore
 *.egg-info*
 .vscode/settings.json
+
+tmp
+.envrc
+.direnv

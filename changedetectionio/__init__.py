@@ -43,8 +43,9 @@ from flask_wtf import CSRFProtect
 
 from changedetectionio import html_tools
 from changedetectionio.api import api_v1
+from changedetectionio.xmlmap import get_links_from_sitemap, recursive_search_from_sitemap
 
-__version__ = '0.39.16'
+__version__ = '0.39.15'
 
 datastore = None
 
@@ -57,6 +58,8 @@ extra_stylesheets = []
 update_q = queue.Queue()
 
 notification_q = queue.Queue()
+
+xmladding_q = queue.Queue()
 
 app = Flask(__name__,
             static_url_path="",
@@ -80,9 +83,10 @@ app.config['TEMPLATES_AUTO_RELOAD'] = True
 csrf = CSRFProtect()
 csrf.init_app(app)
 
-notification_debug_log=[]
+notification_debug_log = []
 
 watch_api = Api(app, decorators=[csrf.exempt])
+
 
 def init_app_secret(datastore_path):
     secret = ""
@@ -103,6 +107,8 @@ def init_app_secret(datastore_path):
 
 # We use the whole watch object from the store/JSON so we can see if there's some related status in terms of a thread
 # running or something similar.
+
+
 @app.template_filter('format_last_checked_time')
 def _jinja2_filter_datetime(watch_obj, format="%Y-%m-%d %H:%M:%S"):
     # Worker thread tells us which UUID it is currently processing.
@@ -129,19 +135,26 @@ def _jinja2_filter_datetimestamp(timestamp, format="%Y-%m-%d %H:%M:%S"):
     # return datetime.datetime.utcfromtimestamp(timestamp).strftime(format)
 
 # When nobody is logged in Flask-Login's current_user is set to an AnonymousUser object.
+
+
 class User(flask_login.UserMixin):
-    id=None
+    id = None
 
     def set_password(self, password):
         return True
+
     def get_user(self, email="defaultuser@changedetection.io"):
         return self
+
     def is_authenticated(self):
         return True
+
     def is_active(self):
         return True
+
     def is_anonymous(self):
         return False
+
     def get_id(self):
         return str(self.id)
 
@@ -159,7 +172,6 @@ class User(flask_login.UserMixin):
 
         raw_salt_pass = base64.b64decode(raw_salt_pass)
 
-
         salt_from_storage = raw_salt_pass[:32]  # 32 is the length of the salt
 
         # Use the exact same setup you used to generate the key, but this time put in the password to check
@@ -169,11 +181,12 @@ class User(flask_login.UserMixin):
             salt_from_storage,
             100000
         )
-        new_key =  salt_from_storage + new_key
+        new_key = salt_from_storage + new_key
 
         return new_key == raw_salt_pass
 
     pass
+
 
 def changedetection_app(config=None, datastore_o=None):
     global datastore
@@ -181,14 +194,13 @@ def changedetection_app(config=None, datastore_o=None):
 
     # so far just for read-only via tests, but this will be moved eventually to be the main source
     # (instead of the global var)
-    app.config['DATASTORE']=datastore_o
+    app.config['DATASTORE'] = datastore_o
 
     #app.config.update(config or {})
 
     login_manager = flask_login.LoginManager(app)
     login_manager.login_view = 'login'
     app.secret_key = init_app_secret(config['datastore_path'])
-
 
     watch_api.add_resource(api_v1.WatchSingleHistory,
                            '/api/v1/watch/<string:uuid>/history/<string:timestamp>',
@@ -203,10 +215,6 @@ def changedetection_app(config=None, datastore_o=None):
 
     watch_api.add_resource(api_v1.Watch, '/api/v1/watch/<string:uuid>',
                            resource_class_kwargs={'datastore': datastore, 'update_q': update_q})
-
-
-
-
 
     # Setup cors headers to allow all domains
     # https://flask-cors.readthedocs.io/en/latest/
@@ -381,7 +389,7 @@ def changedetection_app(config=None, datastore_o=None):
                 datastore.data['watching'][pause_uuid]['paused'] ^= True
                 datastore.needs_write = True
 
-                return redirect(url_for('index', tag = limit_tag))
+                return redirect(url_for('index', tag=limit_tag))
             except KeyError:
                 pass
 
@@ -419,13 +427,12 @@ def changedetection_app(config=None, datastore_o=None):
                                  guid=datastore.data['app_guid'],
                                  queued_uuids=update_q.queue)
 
-
         if session.get('share-link'):
             del(session['share-link'])
         return output
 
-
     # AJAX endpoint for sending a test
+
     @app.route("/notification/send-test", methods=['POST'])
     @login_required
     def ajax_callback_send_notification_test():
@@ -433,7 +440,6 @@ def changedetection_app(config=None, datastore_o=None):
         import apprise
         from .apprise_asset import asset
         apobj = apprise.Apprise(asset=asset)
-
 
         # validate URLS
         if not len(request.form['notification_urls'].strip()):
@@ -458,7 +464,6 @@ def changedetection_app(config=None, datastore_o=None):
 
         return 'OK'
 
-
     @app.route("/clear_history/<string:uuid>", methods=['GET'])
     @login_required
     def clear_watch_history(uuid):
@@ -482,7 +487,7 @@ def changedetection_app(config=None, datastore_o=None):
                 changes_removed = 0
                 for uuid in datastore.data['watching'].keys():
                     datastore.clear_watch_history(uuid)
-                    #TODO: KeyError not checked, as it is above
+                    # TODO: KeyError not checked, as it is above
 
                 flash("Cleared snapshot history for all watches")
             else:
@@ -493,9 +498,9 @@ def changedetection_app(config=None, datastore_o=None):
         output = render_template("clear_all_history.html")
         return output
 
-
     # If they edited an existing watch, we need to know to reset the current/previous md5 to include
     # the excluded text.
+
     def get_current_checksum_include_ignore_text(uuid):
 
         import hashlib
@@ -516,7 +521,7 @@ def changedetection_app(config=None, datastore_o=None):
 
                 handler = fetch_site_status.perform_site_check(datastore=datastore)
                 stripped_content = html_tools.strip_ignore_text(raw_content,
-                                                             datastore.data['watching'][uuid]['ignore_text'])
+                                                                datastore.data['watching'][uuid]['ignore_text'])
 
                 if datastore.data['settings']['application'].get('ignore_whitespace', False):
                     checksum = hashlib.md5(stripped_content.translate(None, b'\r\n\t ')).hexdigest()
@@ -527,12 +532,10 @@ def changedetection_app(config=None, datastore_o=None):
 
         return datastore.data['watching'][uuid]['previous_md5']
 
-
     @app.route("/edit/<string:uuid>", methods=['GET', 'POST'])
     @login_required
     # https://stackoverflow.com/questions/42984453/wtforms-populate-form-with-data-if-data-exists
     # https://wtforms.readthedocs.io/en/3.0.x/forms/#wtforms.form.Form.populate_obj ?
-
     def edit_page(uuid):
         from changedetectionio import forms
 
@@ -647,7 +650,6 @@ def changedetection_app(config=None, datastore_o=None):
             # Only works reliably with Playwright
             visualselector_enabled = os.getenv('PLAYWRIGHT_DRIVER_URL', False) and default['fetch_backend'] == 'html_webdriver'
 
-
             output = render_template("edit.html",
                                      uuid=uuid,
                                      watch=datastore.data['watching'][uuid],
@@ -679,7 +681,6 @@ def changedetection_app(config=None, datastore_o=None):
             default['requests']['proxy'] = system_proxy if system_proxy is not None else datastore.proxy_list[0][0]
             # Used by the form handler to keep or remove the proxy settings
             default['proxy_list'] = datastore.proxy_list
-
 
         # Don't use form.data on POST so that it doesnt overrid the checkbox status from the POST status
         form = forms.globalSettingsForm(formdata=request.form if request.method == 'POST' else None,
@@ -720,7 +721,7 @@ def changedetection_app(config=None, datastore_o=None):
 
         output = render_template("settings.html",
                                  form=form,
-                                 current_base_url = datastore.data['settings']['application']['base_url'],
+                                 current_base_url=datastore.data['settings']['application']['base_url'],
                                  hide_remove_pass=os.getenv("SALTED_PASS", False),
                                  api_key=datastore.data['settings']['application'].get('api_access_token'),
                                  emailprefix=os.getenv('NOTIFICATION_MAIL_BUTTON_PREFIX', False))
@@ -754,8 +755,6 @@ def changedetection_app(config=None, datastore_o=None):
                 d_importer.run(data=request.values.get('distill-io'), flash=flash, datastore=datastore)
                 for uuid in d_importer.new_uuids:
                     update_q.put(uuid)
-
-
 
         # Could be some remaining, or we could be on GET
         output = render_template("import.html",
@@ -821,20 +820,19 @@ def changedetection_app(config=None, datastore_o=None):
         except Exception as e:
             previous_version_file_contents = "Unable to read {}.\n".format(previous_file)
 
-
         screenshot_url = datastore.get_screenshot(uuid)
 
         system_uses_webdriver = datastore.data['settings']['application']['fetch_backend'] == 'html_webdriver'
 
         is_html_webdriver = True if watch.get('fetch_backend') == 'html_webdriver' or (
-                    watch.get('fetch_backend', None) is None and system_uses_webdriver) else False
+            watch.get('fetch_backend', None) is None and system_uses_webdriver) else False
 
         output = render_template("diff.html",
                                  watch_a=watch,
                                  newest=newest_version_file_contents,
                                  previous=previous_version_file_contents,
                                  extra_stylesheets=extra_stylesheets,
-                                 versions=dates[:-1], # All except current/last
+                                 versions=dates[:-1],  # All except current/last
                                  uuid=uuid,
                                  newest_version_timestamp=dates[-1],
                                  current_previous_version=str(previous_version),
@@ -871,7 +869,7 @@ def changedetection_app(config=None, datastore_o=None):
             flash("No history found for the specified link, bad link?", "error")
             return redirect(url_for('index'))
 
-        if watch.history_n >0:
+        if watch.history_n > 0:
             timestamps = sorted(watch.history.keys(), key=lambda x: int(x))
             filename = watch.history[timestamps[-1]]
             try:
@@ -892,16 +890,15 @@ def changedetection_app(config=None, datastore_o=None):
                                                                         mode='line numbers'
                                                                         )
                     # Prepare the classes and lines used in the template
-                    i=0
+                    i = 0
                     for l in tmp:
-                        classes=[]
-                        i+=1
+                        classes = []
+                        i += 1
                         if i in ignored_line_numbers:
                             classes.append('ignored')
                         if i in trigger_line_numbers:
                             classes.append('triggered')
                         content.append({'line': l, 'classes': ' '.join(classes)})
-
 
             except Exception as e:
                 content.append({'line': "File doesnt exist or unable to read file {}".format(filename), 'classes': ''})
@@ -912,7 +909,7 @@ def changedetection_app(config=None, datastore_o=None):
         system_uses_webdriver = datastore.data['settings']['application']['fetch_backend'] == 'html_webdriver'
 
         is_html_webdriver = True if watch.get('fetch_backend') == 'html_webdriver' or (
-                watch.get('fetch_backend', None) is None and system_uses_webdriver) else False
+            watch.get('fetch_backend', None) is None and system_uses_webdriver) else False
 
         output = render_template("preview.html",
                                  content=content,
@@ -1037,7 +1034,6 @@ def changedetection_app(config=None, datastore_o=None):
             except FileNotFoundError:
                 abort(404)
 
-
         if group == 'visual_selector_data':
             # Could be sensitive, follow password requirements
             if datastore.data['settings']['application']['password'] and not flask_login.current_user.is_authenticated:
@@ -1078,16 +1074,27 @@ def changedetection_app(config=None, datastore_o=None):
             flash('The URL {} already exists'.format(url), "error")
             return redirect(url_for('index'))
 
+        # DM: add xmlmap flag to uuid
+        extra = {}
+        if url.split(".")[-1] == "xml":
+            print("XML SITEMAP is Found!")
+            extra['xmlmap'] = True
+
         # @todo add_watch should throw a custom Exception for validation etc
-        new_uuid = datastore.add_watch(url=url, tag=request.form.get('tag').strip())
+        new_uuid = datastore.add_watch(url=url, tag=request.form.get('tag').strip(), extras=extra)
         if new_uuid:
             # Straight into the queue.
             update_q.put(new_uuid)
-            flash("Watch added.")
+            if not extra.get("xmlmap", False):
+                flash("Watch added.")
 
         return redirect(url_for('index'))
 
-
+    @app.route("/tmp/sitemap.xml", methods=['GET'])
+    def tmp_sitemap():
+        with open('/app/tmp/sitemap_test.xml') as f:
+            sm = f.read()
+        return sm
 
     @app.route("/api/delete", methods=['GET'])
     @login_required
@@ -1182,7 +1189,7 @@ def changedetection_app(config=None, datastore_o=None):
             if k.startswith('notification_'):
                 del watch[k]
 
-        for r in['uuid', 'last_checked', 'last_changed']:
+        for r in ['uuid', 'last_checked', 'last_changed']:
             if watch.get(r):
                 del (watch[r])
 
@@ -1201,7 +1208,6 @@ def changedetection_app(config=None, datastore_o=None):
 
             session['share-link'] = "https://changedetection.io/share/{}".format(res['share_key'])
 
-
         except Exception as e:
             logging.error("Error sharing -{}".format(str(e)))
             flash("Could not share, something went wrong while communicating with the share server - {}".format(str(e)), 'error')
@@ -1212,9 +1218,13 @@ def changedetection_app(config=None, datastore_o=None):
         return redirect(url_for('index'))
 
     # @todo handle ctrl break
-    ticker_thread = threading.Thread(target=ticker_thread_check_time_launch_checks).start()
+    ticker_thread = threading.Thread(target=ticker_thread_check_time_launch_checks)
+    ticker_thread.start()
 
     threading.Thread(target=notification_runner).start()
+
+    # DM: thread for tender-adding links from xml
+    threading.Thread(target=xml_link_adder).start()
 
     # Check for new release version, but not when running in test/build
     if not os.getenv("GITHUB_REF", False):
@@ -1250,6 +1260,33 @@ def check_for_new_version():
         # Check daily
         app.config.exit.wait(86400)
 
+
+def xml_link_adder():
+
+    while not app.config.exit.is_set():
+        try:
+            # At the moment only one thread runs (single runner)
+            link, tag = xmladding_q.get(block=False)
+            if not datastore.url_exists(link):
+                print(f"(!) LINK ADDED FROM XML TO ADDIN QUEUE: {link}")
+            else:
+                print(f"ADDER: PASS: Link {link} from xml is already in watching!")
+                continue
+        except queue.Empty:
+            time.sleep(1)
+        else:
+            _extra = {}
+            if link.split(".")[-1] == "xml":
+                _extra['xmlmap'] = True
+            # @todo add_watch should throw a custom Exception for validation etc
+            new_uuid = datastore.add_watch(url=link, tag=tag, extras=_extra)
+            if new_uuid:
+                # Straight into the queue.
+                update_q.put(new_uuid)
+            #
+            # time.sleep(0.3)
+
+
 def notification_runner():
     global notification_debug_log
     from datetime import datetime
@@ -1284,9 +1321,10 @@ def notification_runner():
                 notification_debug_log += log_lines
 
             # Process notifications
-            notification_debug_log+= ["{} - SENDING - {}".format(now.strftime("%Y/%m/%d %H:%M:%S,000"), json.dumps(sent_obj))]
+            notification_debug_log += ["{} - SENDING - {}".format(now.strftime("%Y/%m/%d %H:%M:%S,000"), json.dumps(sent_obj))]
             # Trim the log length
             notification_debug_log = notification_debug_log[-100:]
+
 
 # Thread runner to check every minute, look for new watches to feed into the Queue.
 def ticker_thread_check_time_launch_checks():
@@ -1300,7 +1338,7 @@ def ticker_thread_check_time_launch_checks():
     # Can be overriden by ENV or use the default settings
     n_workers = int(os.getenv("FETCH_WORKERS", datastore.data['settings']['requests']['workers']))
     for _ in range(n_workers):
-        new_worker = update_worker.update_worker(update_q, notification_q, app, datastore)
+        new_worker = update_worker.update_worker(update_q, notification_q, xmladding_q, app, datastore)
         running_update_threads.append(new_worker)
         new_worker.start()
 
@@ -1327,7 +1365,6 @@ def ticker_thread_check_time_launch_checks():
         while update_q.qsize() >= 2000:
             time.sleep(1)
 
-
         recheck_time_system_seconds = int(datastore.threshold_seconds)
 
         # Check for watches outside of the time threshold to put in the thread queue.
@@ -1353,15 +1390,14 @@ def ticker_thread_check_time_launch_checks():
                 if watch.jitter_seconds == 0:
                     watch.jitter_seconds = random.uniform(-abs(jitter), jitter)
 
-
             seconds_since_last_recheck = now - watch['last_checked']
             if seconds_since_last_recheck >= (threshold + watch.jitter_seconds) and seconds_since_last_recheck >= recheck_time_minimum_seconds:
                 if not uuid in running_uuids and uuid not in update_q.queue:
                     print("Queued watch UUID {} last checked at {} queued at {:0.2f} jitter {:0.2f}s, {:0.2f}s since last checked".format(uuid,
-                                                                                                         watch['last_checked'],
-                                                                                                         now,
-                                                                                                         watch.jitter_seconds,
-                                                                                                         now - watch['last_checked']))
+                                                                                                                                          watch['last_checked'],
+                                                                                                                                          now,
+                                                                                                                                          watch.jitter_seconds,
+                                                                                                                                          now - watch['last_checked']))
                     # Into the queue with you
                     update_q.put(uuid)
 

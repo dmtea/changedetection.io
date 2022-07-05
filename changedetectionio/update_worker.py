@@ -3,6 +3,7 @@ import queue
 import time
 
 from changedetectionio import content_fetcher
+from changedetectionio.xmlmap import not_recursive_search_from_sitemap, recursive_search_from_sitemap
 # A single update worker
 #
 # Requests for checking on a single site(watch) from a queue of watches
@@ -12,10 +13,11 @@ from changedetectionio import content_fetcher
 class update_worker(threading.Thread):
     current_uuid = None
 
-    def __init__(self, q, notification_q, app, datastore, *args, **kwargs):
+    def __init__(self, q, notification_q, xmladding_q, app, datastore, *args, **kwargs):
         self.q = q
         self.app = app
         self.notification_q = notification_q
+        self.xmladding_q = xmladding_q
         self.datastore = datastore
         super().__init__(*args, **kwargs)
 
@@ -39,7 +41,7 @@ class update_worker(threading.Thread):
                     changed_detected = False
                     contents = ""
                     screenshot = False
-                    update_obj= {}
+                    update_obj = {}
                     xpath_data = False
                     now = time.time()
 
@@ -56,7 +58,8 @@ class update_worker(threading.Thread):
                         # Totally fine, it's by choice - just continue on, nothing more to care about
                         # Page had elements/content but no renderable text
                         if self.datastore.data['watching'].get(uuid, False) and self.datastore.data['watching'][uuid].get('css_filter'):
-                            self.datastore.update_watch(uuid=uuid, update_obj={'last_error': "Got HTML content but no text found (CSS / xPath Filter not found in page?)"})
+                            self.datastore.update_watch(uuid=uuid, update_obj={
+                                                        'last_error': "Got HTML content but no text found (CSS / xPath Filter not found in page?)"})
                         else:
                             self.datastore.update_watch(uuid=uuid, update_obj={'last_error': "Got HTML content but no text found."})
                         pass
@@ -81,7 +84,7 @@ class update_worker(threading.Thread):
                     else:
                         try:
                             watch = self.datastore.data['watching'][uuid]
-                            fname = "" # Saved history text filename
+                            fname = ""  # Saved history text filename
 
                             # For the FIRST time we check a site, or a change detected, save the snapshot.
                             if changed_detected or not watch['last_checked']:
@@ -93,8 +96,9 @@ class update_worker(threading.Thread):
 
                             # A change was detected
                             if changed_detected:
+
                                 n_object = {}
-                                print (">> Change detected in UUID {} - {}".format(uuid, watch['url']))
+                                print(">> Change detected in UUID {} - {}".format(uuid, watch['url']))
 
                                 # Notifications should only trigger on the second time (first time, we gather the initial snapshot)
                                 if watch.history_n >= 2:
@@ -148,6 +152,38 @@ class update_worker(threading.Thread):
 
                                         self.notification_q.put(n_object)
 
+                                # DM: check if it have xmlmap -> if yes: do some work for extra checking
+                                if watch.get('xmlmap', False):
+                                    print("XMLMAP updated. Checking for new urls of it ...")
+                                    _links = not_recursive_search_from_sitemap(watch['url'], datastore=self.datastore)
+                                    _notify_links = []
+                                    if _links:
+                                        for link in _links:
+                                            if not self.datastore.url_exists(link):
+                                                _notify_links.append(link)
+                                                obj = (link, watch['tag'].strip())
+                                                self.xmladding_q.put(obj)
+                                            else:
+                                                print(f"UPDATER: Link {link} from xml {watch['url']} is in watching!")
+
+                                        if len(_notify_links) > 0:
+                                            # notification_q
+                                            n_object2 = {}
+                                            if len(self.datastore.data['settings']['application']['notification_urls']):
+                                                n_object2['notification_urls'] = self.datastore.data['settings']['application']['notification_urls']
+                                                n_object2['notification_title'] = 'ChangeDetection.io Notification - New links from {watch_url}'
+                                                n_object2['notification_body'] = 'There is a new links in sitemap {watch_url}\n<br>---<br>\n{diff}\n<br>---\n'
+                                                n_object2['notification_format'] = "HTML"
+                                                #
+                                                n_object2.update({
+                                                    'watch_url': watch['url'],
+                                                    'uuid': "",
+                                                    'current_snapshot': " ",
+                                                    'diff': "<br>\n".join(_notify_links),
+                                                    'diff_full': "-"
+                                                })
+                                                self.notification_q.put(n_object2)
+
                         except Exception as e:
                             # Catch everything possible here, so that if a worker crashes, we don't lose it until restart!
                             print("!!!! Exception in update_worker !!!\n", e)
@@ -164,7 +200,6 @@ class update_worker(threading.Thread):
                             self.datastore.save_screenshot(watch_uuid=uuid, screenshot=screenshot)
                         if xpath_data:
                             self.datastore.save_xpath_data(watch_uuid=uuid, data=xpath_data)
-
 
                 self.current_uuid = None  # Done
                 self.q.task_done()

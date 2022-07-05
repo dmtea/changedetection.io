@@ -19,6 +19,8 @@ from . model import App, Watch
 # Is there an existing library to ensure some data store (JSON etc) is in sync with CRUD methods?
 # Open a github issue if you know something :)
 # https://stackoverflow.com/questions/6190468/how-to-trigger-function-on-value-change
+
+
 class ChangeDetectionStore:
     lock = Lock()
     # For general updates/writes that can wait a few seconds
@@ -40,7 +42,7 @@ class ChangeDetectionStore:
 
         # Base definition for all watchers
         # deepcopy part of #569 - not sure why its needed exactly
-        self.generic_definition = deepcopy(Watch.model(datastore_path = datastore_path, default={}))
+        self.generic_definition = deepcopy(Watch.model(datastore_path=datastore_path, default={}))
 
         if path.isfile('changedetectionio/source.txt'):
             with open('changedetectionio/source.txt') as f:
@@ -73,7 +75,7 @@ class ChangeDetectionStore:
 
                 # Convert each existing watch back to the Watch.model object
                 for uuid, watch in self.__data['watching'].items():
-                    watch['uuid']=uuid
+                    watch['uuid'] = uuid
                     self.__data['watching'][uuid] = Watch.model(datastore_path=self.datastore_path, default=watch)
                     print("Watching:", uuid, self.__data['watching'][uuid]['url'])
 
@@ -183,9 +185,9 @@ class ChangeDetectionStore:
                 self.__data['watching'][uuid]['fetch_backend'] = self.__data['settings']['application']['fetch_backend']
 
         # Re #152, Return env base_url if not overriden, @todo also prefer the proxy pass url
-        env_base_url = os.getenv('BASE_URL','')
+        env_base_url = os.getenv('BASE_URL', '')
         if not self.__data['settings']['application']['base_url']:
-          self.__data['settings']['application']['base_url'] = env_base_url.strip('" ')
+            self.__data['settings']['application']['base_url'] = env_base_url.strip('" ')
 
         return self.__data
 
@@ -276,7 +278,7 @@ class ChangeDetectionStore:
             extras = {}
         # should always be str
         if tag is None or not tag:
-            tag=''
+            tag = ''
 
         # Incase these are copied across, assume it's a reference and deepcopy()
         apply_extras = deepcopy(extras)
@@ -323,7 +325,7 @@ class ChangeDetectionStore:
                     del apply_extras[k]
 
             new_watch.update(apply_extras)
-            self.__data['watching'][new_uuid]=new_watch
+            self.__data['watching'][new_uuid] = new_watch
 
         # Get the directory ready
         output_path = "{}/{}".format(self.datastore_path, new_uuid)
@@ -348,7 +350,7 @@ class ChangeDetectionStore:
         output_path = "{}/{}".format(self.datastore_path, watch_uuid)
         screenshot_filename = "{}/last-screenshot.png".format(output_path)
         elements_index_filename = "{}/elements.json".format(output_path)
-        if path.isfile(screenshot_filename) and  path.isfile(elements_index_filename) :
+        if path.isfile(screenshot_filename) and path.isfile(elements_index_filename):
             return True
 
         return False
@@ -368,7 +370,6 @@ class ChangeDetectionStore:
             f.write(json.dumps(data))
             f.close()
 
-
     def sync_to_json(self):
         logging.info("Saving JSON..")
         print("Saving JSON..")
@@ -377,7 +378,7 @@ class ChangeDetectionStore:
         except RuntimeError as e:
             # Try again in 15 seconds
             time.sleep(15)
-            logging.error ("! Data changed when writing to JSON, trying again.. %s", str(e))
+            logging.error("! Data changed when writing to JSON, trying again.. %s", str(e))
             self.sync_to_json()
             return
         else:
@@ -417,9 +418,9 @@ class ChangeDetectionStore:
     # Go through the datastore path and remove any snapshots that are not mentioned in the index
     # This usually is not used, but can be handy.
     def remove_unused_snapshots(self):
-        print ("Removing snapshots from datastore that are not in the index..")
+        print("Removing snapshots from datastore that are not in the index..")
 
-        index=[]
+        index = []
         for uuid in self.data['watching']:
             for id in self.data['watching'][uuid].history:
                 index.append(self.data['watching'][uuid].history[str(id)])
@@ -430,7 +431,7 @@ class ChangeDetectionStore:
         for uuid in self.data['watching']:
             for item in pathlib.Path(self.datastore_path).rglob(uuid+"/*.txt"):
                 if not str(item) in index:
-                    print ("Removing",item)
+                    print("Removing", item)
                     unlink(item)
 
     def import_proxy_list(self, filename):
@@ -441,17 +442,17 @@ class ChangeDetectionStore:
             l = []
             for row in reader:
                 if len(row):
-                    if len(row)>=2:
+                    if len(row) >= 2:
                         l.append(tuple(row[:2]))
                     else:
                         l.append(tuple([row[0], row[0]]))
             self.proxy_list = l if len(l) else None
 
-
     # Run all updates
     # IMPORTANT - Each update could be run even when they have a new install and the schema is correct
     #             So therefor - each `update_n` should be very careful about checking if it needs to actually run
     #             Probably we should bump the current update schema version with each tag release version?
+
     def run_updates(self):
         import inspect
         import shutil
@@ -465,7 +466,7 @@ class ChangeDetectionStore:
 
         for update_n in updates_available:
             if update_n > self.__data['settings']['application']['schema_version']:
-                print ("Applying update_{}".format((update_n)))
+                print("Applying update_{}".format((update_n)))
                 # Wont exist on fresh installs
                 if os.path.exists(self.json_store_path):
                     shutil.copyfile(self.json_store_path, self.datastore_path+"/url-watches-before-{}.json".format(update_n))
@@ -504,7 +505,7 @@ class ChangeDetectionStore:
             if watch.get('history', False):
                 for d, p in watch['history'].items():
                     d = int(d)  # Used to be keyed as str, we'll fix this now too
-                    history.append("{},{}\n".format(d,p))
+                    history.append("{},{}\n".format(d, p))
 
                 if len(history):
                     target_path = os.path.join(self.datastore_path, uuid)
