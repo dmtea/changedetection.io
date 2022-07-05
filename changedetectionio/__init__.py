@@ -45,7 +45,7 @@ from changedetectionio import html_tools
 from changedetectionio.api import api_v1
 from changedetectionio.xmlmap import get_links_from_sitemap, recursive_search_from_sitemap
 
-__version__ = '0.39.15'
+__version__ = '0.39.16'
 
 datastore = None
 
