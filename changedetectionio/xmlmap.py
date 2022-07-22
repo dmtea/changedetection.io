@@ -22,6 +22,8 @@ def get_links_from_sitemap(url):
             __link = loc_tag.find("loc")
             links.append(__link.text)
 
+    print("PARSED LNKS: ", links)
+
     return links
 
 
@@ -37,8 +39,8 @@ def recursive_search_from_sitemap(url, datastore):
                 print("XML SITEMAP is Found!")
                 link_links = recursive_search_from_sitemap(link, datastore=datastore)
                 new_links.extend(link_links)
-        # else:
-        #     print(f"Link is already in watch, pass ({link})")
+        else:
+            print(f"Link is already in watch, pass ({link})")
     return new_links
 
 
@@ -54,6 +56,6 @@ def not_recursive_search_from_sitemap(url, datastore):
             #     print("XML SITEMAP is Found!")
             #     link_links = recursive_search_from_sitemap(link, datastore=datastore)
             #     new_links.extend(link_links)
-        # else:
-        #     print(f"Link is already in watch, pass ({link})")
+        else:
+            print(f"Link is already in watch, pass ({link})")
     return new_links

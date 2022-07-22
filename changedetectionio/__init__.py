@@ -1076,6 +1076,7 @@ def changedetection_app(config=None, datastore_o=None):
 
         # DM: add xmlmap flag to uuid
         extra = {}
+        print("ext:", url.split(".")[-1])
         if url.split(".")[-1] == "xml":
             print("XML SITEMAP is Found!")
             extra['xmlmap'] = True
@@ -1090,11 +1091,11 @@ def changedetection_app(config=None, datastore_o=None):
 
         return redirect(url_for('index'))
 
-    @app.route("/tmp/sitemap.xml", methods=['GET'])
-    def tmp_sitemap():
-        with open('/app/tmp/sitemap_test.xml') as f:
-            sm = f.read()
-        return sm
+    # @app.route("/tmp/sitemap.xml", methods=['GET'])
+    # def tmp_sitemap():
+    #     with open('/app/tmp/sitemap_test.xml') as f:
+    #         sm = f.read()
+    #     return sm
 
     @app.route("/api/delete", methods=['GET'])
     @login_required
@@ -1275,6 +1276,7 @@ def xml_link_adder():
         except queue.Empty:
             time.sleep(1)
         else:
+            print("XMLADIING processing ...")
             _extra = {}
             if link.split(".")[-1] == "xml":
                 _extra['xmlmap'] = True
