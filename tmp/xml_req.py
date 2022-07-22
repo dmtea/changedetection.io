@@ -1,4 +1,33 @@
 import requests
+from bs4 import BeautifulSoup
+
+
+def get_links_from_sitemap(url):
+
+    headers = {
+        'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36',
+    }
+    links = []
+
+    response = requests.get(url, headers=headers)
+    soup = BeautifulSoup(response.text, "lxml")
+
+    maps_tags = soup.find_all("sitemap")
+    if maps_tags and len(maps_tags) > 0:
+        for loc_tag in maps_tags:
+            __link = loc_tag.find("loc")
+            links.append(__link.text)
+
+    loc_tags = soup.find_all("url")
+    if loc_tags and len(loc_tags) > 0:
+        for loc_tag in loc_tags:
+            __link = loc_tag.find("loc")
+            links.append(__link.text)
+
+    print("PARSED LNKS: ", links)
+
+    return links
+
 
 cookies = {
     # '_ga': 'GA1.1.699464716.1656709993',
@@ -26,10 +55,12 @@ headers = {
 
 # response = requests.get('https://lotteryngo.com/sitemap_index.xml', cookies=cookies, headers=headers)
 # response = requests.get('https://toponlinecasino.com.ph/sitemap_index.xml', cookies=cookies, headers=headers)
-response = requests.get('https://onlinegambling.com.ph/sitemap_index.xml', cookies=cookies, headers=headers)
+# response = requests.get('https://onlinegambling.com.ph/sitemap_index.xml', cookies=cookies, headers=headers)
 
+linksfrom = get_links_from_sitemap('https://onlinegambling.com.ph/sitemap_index.xml')
+print(linksfrom)
 
-print(response.text)
+# print(response.text)
 
-with open('tmp/sitemap_test.xml', 'w') as f:
-    f.write(response.text)
+# with open('tmp/sitemap_test.xml', 'w') as f:
+#     f.write(response.text)
