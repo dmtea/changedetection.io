@@ -24,7 +24,9 @@ def get_links_from_sitemap(url):
 
     print("PARSED LNKS: ", links)
 
-    return links
+    all_links = maps_tags + links
+
+    return all_links
 
 
 def recursive_search_from_sitemap(url, datastore):
