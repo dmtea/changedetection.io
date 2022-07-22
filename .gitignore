@@ -12,6 +12,8 @@ test-datastore
 *.egg-info*
 .vscode/settings.json
 
-tmp
+client_creds
+my_creds
+
 .envrc
 .direnv
