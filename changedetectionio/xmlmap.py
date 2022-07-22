@@ -22,9 +22,9 @@ def get_links_from_sitemap(url):
             __link = loc_tag.find("loc")
             links.append(__link.text)
 
-    print("PARSED LNKS: ", links)
-
     all_links = maps_tags + links
+
+    print("PARSED LNKS: ", all_links)
 
     return all_links
 
