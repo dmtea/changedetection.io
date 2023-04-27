@@ -36,6 +36,8 @@ from flask import (
 from changedetectionio import html_tools
 from changedetectionio.api import api_v1
 
+from changedetectionio.xmlmap import get_links_from_sitemap, recursive_search_from_sitemap
+
 __version__ = '0.41.1'
 
 datastore = None
@@ -48,6 +50,7 @@ extra_stylesheets = []
 
 update_q = queue.PriorityQueue()
 notification_q = queue.Queue()
+xmladding_q = queue.Queue()
 
 app = Flask(__name__,
             static_url_path="",
@@ -1149,7 +1152,17 @@ def changedetection_app(config=None, datastore_o=None):
 
         add_paused = request.form.get('edit_and_watch_submit_button') != None
         processor = request.form.get('processor', 'text_json_diff')
-        new_uuid = datastore.add_watch(url=url, tag=request.form.get('tag').strip(), extras={'paused': add_paused, 'processor': processor})
+        # new_uuid = datastore.add_watch(url=url, tag=request.form.get('tag').strip(), extras={'paused': add_paused, 'processor': processor})
+        
+        # @tatradev
+        # add xmlmap flag to uuid
+        xmlmap = False
+        print("ext:", url.split(".")[-1])
+        if url.split(".")[-1] == "xml":
+            print("XML SITEMAP is Found!")
+            xmlmap = True
+
+        new_uuid = datastore.add_watch(url=url, tag=request.form.get('tag').strip(), extras={'paused': add_paused, 'processor': processor, 'xmlmap': xmlmap,})
 
         if new_uuid:
             if add_paused:
@@ -1360,6 +1373,10 @@ def changedetection_app(config=None, datastore_o=None):
     ticker_thread = threading.Thread(target=ticker_thread_check_time_launch_checks).start()
     threading.Thread(target=notification_runner).start()
 
+    # @tatradev
+    # thread for tender-adding links from xml
+    threading.Thread(target=xml_link_adder).start()
+
     # Check for new release version, but not when running in test/build or pytest
     if not os.getenv("GITHUB_REF", False) and not config.get('disable_checkver') == True:
         threading.Thread(target=check_for_new_version).start()
@@ -1393,6 +1410,38 @@ def check_for_new_version():
 
         # Check daily
         app.config.exit.wait(86400)
+
+
+# @tatradev
+def xml_link_adder():
+
+    while not app.config.exit.is_set():
+        try:
+            # At the moment only one thread runs (single runner)
+            link, tag = xmladding_q.get(block=False)
+            if not datastore.url_exists(link):
+                print(f"(!) LINK ADDED FROM XML TO ADDIN QUEUE: {link}")
+            else:
+                print(f"ADDER: PASS: Link {link} from xml is already in watching!")
+                continue
+        except queue.Empty:
+            time.sleep(1)
+        else:
+            print("XMLADIING processing ...")
+            _extra = {}
+            if link.split(".")[-1] == "xml":
+                _extra['xmlmap'] = True
+            # @todo add_watch should throw a custom Exception for validation etc
+            new_uuid = datastore.add_watch(url=link, tag=tag, extras=_extra)
+            if new_uuid:
+                # Straight into the queue.
+                # update_q.put(new_uuid)
+                update_q.put(queuedWatchMetaData.PrioritizedItem(priority=1, item={'uuid': new_uuid}))
+                
+            #
+            # time.sleep(0.3)
+# end@tatradev
+
 
 def notification_runner():
     global notification_debug_log
@@ -1445,7 +1494,9 @@ def ticker_thread_check_time_launch_checks():
     # Can be overriden by ENV or use the default settings
     n_workers = int(os.getenv("FETCH_WORKERS", datastore.data['settings']['requests']['workers']))
     for _ in range(n_workers):
-        new_worker = update_worker.update_worker(update_q, notification_q, app, datastore)
+        # new_worker = update_worker.update_worker(update_q, notification_q, app, datastore)
+        # @tatradev
+        new_worker = update_worker.update_worker(update_q, notification_q, xmladding_q, app, datastore)
         running_update_threads.append(new_worker)
         new_worker.start()
 

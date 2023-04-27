@@ -64,8 +64,9 @@
                     <strong>Change</strong>Detection.io</a
                 -->
                 {% else %}
-                <!--a class="pure-menu-heading" href="{{url_for('index')}}"> <strong>Change</strong>Detection.io</a-->
-                <img src="/static/images/GHA-logo-150x50-1.png" style="height: auto; width: 5%" />
+                <a href="{{url_for('index')}}">
+                    <img src="/static/images/GHA-logo-150x50-1.png" style="height: auto; width: 50%" />
+                </a>
                 {% endif %} {% if current_diff_url %}
                 <a class="current-diff-url" href="{{ current_diff_url }}">
                     <span style="max-width: 30%; overflow: hidden">{{ current_diff_url }}</span></a

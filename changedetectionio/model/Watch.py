@@ -63,6 +63,7 @@ base_config = {
     'uuid': str(uuid.uuid4()),
     'webdriver_delay': None,
     'webdriver_js_execute_code': None,  # Run before change-detection
+    'xmlmap': False, # @tatradev
 }
 
 
