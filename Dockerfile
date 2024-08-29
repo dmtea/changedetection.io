@@ -32,7 +32,8 @@ RUN pip install --target=/dependencies playwright~=1.27.1 \
 FROM python:3.10-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libssl1.1 \
+    # libssl1.1 \
+    libssl3 \
     libxslt1.1 \
     # For pdftohtml
     poppler-utils \
